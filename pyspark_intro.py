@@ -32,6 +32,39 @@ news_df.printSchema()
 news_df.count()
 # 714415
 
+# Remove extra spaces
+from pyspark.sql.functions import trim
+news_df = news_df.withColumn("classificacao", trim(news_df.classificacao))
+news_df = news_df.withColumn("conteudo", trim(news_df.conteudo))
+news_df = news_df.withColumn("resumo", trim(news_df.resumo))
+news_df = news_df.withColumn("titulo", trim(news_df.titulo))
+
+
+	
+# Clean everything inside <>
+from pyspark.sql.functions import *    
+news_df = news_df.withColumn('conteudo', regexp_replace('conteudo', '<.*?>', ''))
+
+##############################
+# Clean text removing accents
+import unicodedata
+from pyspark.sql.types import StringType
+
+# Receives  a string as an argument
+def remove_accents_(inputStr):
+    # first, normalize strings:
+    nfkdStr = unicodedata.normalize('NFKD', inputStr)
+    # Keep chars that has no other char combined (i.e. accents chars)
+    withOutAccents = u"".join([c for c in nfkdStr if not unicodedata.combining(c)])
+    return withOutAccents
+
+remove_accents = udf(lambda c: remove_accents_(c) if c != None else c, StringType())
+    
+##############################
+
+news_df = news_df.withColumn('classificacao', remove_accents(news_df.classificacao))
+
+
 #newsFile = sc.textFile("file:///home/diego/Documents/Data/cod_clas_con_res_tit_semIne.csv")
 #newsFile_map = newsFile.map(lambda l: l.split(';')).map(lambda l: (l[0], l[1], l[2], l[3], l[4]))
 
@@ -55,8 +88,6 @@ news_df.count()
 
 
 # Remove special caracters, transform to lower and remove accents
-def remove_accents(word):
-    return ''.join(x for x in unicodedata.normalize('NFKD', word) if x in string.ascii_letters).lower()
 
 
-news_df = sqlContext.createDataFrame(newsNoFile, schema)
+
