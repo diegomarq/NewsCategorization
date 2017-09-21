@@ -35,6 +35,8 @@ news_df = news_df.withColumn("titulo", trim(news_df.titulo))
 # Clean everything inside <>
 from pyspark.sql.functions import *    
 news_df = news_df.withColumn('conteudo', regexp_replace('conteudo', '<.*?>', ''))
+news_df = news_df.withColumn('resumo', regexp_replace('resumo', '<.*?>', ''))
+news_df = news_df.withColumn('titulo', regexp_replace('titulo', '<.*?>', ''))
 
 ##############################
 # Clean text removing accents
@@ -59,7 +61,7 @@ news_df = news_df.withColumn('titulo', remove_accents(news_df.titulo))
 # Null categories
 from pyspark.sql.functions import isnan, when, count, col
 
-news_df.select([count(when(isnan(c) | col(c).isNull(), c)).alias(c) for c in news_df.columns]).show()
+#news_df.select([count(when(isnan(c) | col(c).isNull(), c)).alias(c) for c in news_df.columns]).show()
 #
 #+------+-------------+--------+------+------+                                   
 #|codigo|classificacao|conteudo|resumo|titulo|
@@ -68,7 +70,7 @@ news_df.select([count(when(isnan(c) | col(c).isNull(), c)).alias(c) for c in new
 #+------+-------------+--------+------+------+
 
 # column conteudo with empty value
-news_df[news_df.conteudo == ''].count()
+#news_df[news_df.conteudo == ''].count()
 #4750
 
 # Get only conteudo not empty
@@ -86,7 +88,7 @@ news_df = news_df.where(news_df.conteudo != '')
 ##############################
 
 # Group and count the categories present in the news
-news_df.groupBy('classificacao').count().sort(col("count").desc()).show()
+#news_df.groupBy('classificacao').count().sort(col("count").desc()).show()
 #
 #+----------------+------+                                                       
 #|   classificacao| count|
@@ -115,7 +117,7 @@ news_df.groupBy('classificacao').count().sort(col("count").desc()).show()
 
 #only showing top 20 rows
 
-news_df.groupBy('classificacao').count().sort(col("count").asc()).show()
+#news_df.groupBy('classificacao').count().sort(col("count").asc()).show()
 #
 #+-----------------+-----+                                                       
 #|    classificacao|count|
@@ -144,10 +146,10 @@ news_df.groupBy('classificacao').count().sort(col("count").asc()).show()
 #only showing top 20 rows
 
 
-cla_count_asc_df = news_df.groupBy('classificacao').count().sort(col("count").asc())
+#cla_count_asc_df = news_df.groupBy('classificacao').count().sort(col("count").asc())
 
 # Number of classifcations or categories
-cla_count_asc_df.count()
+#cla_count_asc_df.count()
 #29                          
 
 

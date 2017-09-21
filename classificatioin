@@ -5,6 +5,9 @@ Created on Wed Sep 20 21:53:08 2017
 
 From: https://spark.apache.org/docs/2.1.0/mllib-decision-tree.html
 From: https://github.com/apache/spark/blob/master/python/pyspark/ml/classification.py
+From: https://spark.apache.org/docs/latest/ml-classification-regression.html#linear-support-vector-machine
+From: https://github.com/rukamesh/CarPricePrediction/blob/master/car_price_prediction.py
+From: https://www.analyticsvidhya.com/blog/2016/10/spark-dataframe-and-operations/
 
 # Run first preprocessing file
 
@@ -13,7 +16,7 @@ From: https://github.com/apache/spark/blob/master/python/pyspark/ml/classificati
 # Converting dataframe to label  point
 
 from pyspark.mllib.util import MLUtils
-from pyspark.mllib.regression import LabeledPoint
+#from pyspark.mllib.regression import LabeledPoint
 
 # dataframe to rdd
 #news_rdd = news_df.rdd
@@ -52,6 +55,74 @@ news_enc = encoder.transform(news_indexed)
 #+-------------+----------------+
 
 ###################################################
+# Decision tree
+
+from pyspark.ml.feature import StringIndexer
+from pyspark.ml import Pipeline
+from pyspark.ml.classification import DecisionTreeClassifier
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.ml.feature import VectorAssembler
+
+#Get sample 20% from data
+data_s1 = news_df.sample(False, 0.2, 42)
+data_s2 = news_df.sample(False, 0.2, 43)
+#data_s1.count(),data_s2.count()
+#(141704, 141351) 
+
+# Divide data
+data = data_s2
+data_test, data_train = data.randomSplit(weights=[0.3, 0.7], seed=10)
+
+def get_indexer_input(data):
+    str_cols_value = {}
+    for c, t in data[data.columns].dtypes:
+        if t == 'string':
+            str_cols_value[c] = StringIndexer(inputCol=c, outputCol='indexed_' + c).fit(data)
+            return str_cols_value
+        
+get_indexer_input = get_indexer_input(data)
+
+def model_training(data_train, indexer_input):
+    x_cols = list(set(data_train.columns) - set(indexer_input.keys() + ["classificacao"]))
+    str_ind_cols = ['indexed_' + column for column in indexer_input.keys()]
+    indexers = indexer_input.values()
+    pipeline_tr = Pipeline(stages=indexers)
+    data_tr = pipeline_tr.fit(data_train).transform(data_train)
+    assembler = VectorAssembler(inputCols=x_cols, outputCol="features")
+    dt = DecisionTreeClassifier(labelCol="classificacao", featuresCol="features")
+    pipeline_training = Pipeline(stages=[assembler, dt])
+    model = pipeline_training.fit(data_tr)
+    return model
+
+def model_testing(model, data_test, indexer_input):
+    indexers = indexer_input.values()
+    pipeline_te = Pipeline(stages=indexers)
+    data_te = pipeline_te.fit(data_test).transform(data_test)
+    predictions = model.transform(data_te)
+    predictions.select("Price", "Mileage", "Make", "Model", "Trim", "Type", "prediction").toPandas().to_csv(
+        './Output/prediction_without_categorical_variable.csv')
+    return "model testing file saved"
+
+
+model = model_training(data_train, get_indexer_input)
+model_testing(model, data_test, get_indexer_input)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #Decision Tree
 
 
