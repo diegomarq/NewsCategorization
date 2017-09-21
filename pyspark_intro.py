@@ -51,6 +51,11 @@ def remove_accents_(inputStr):
 
 remove_accents = udf(lambda c: remove_accents_(c) if c != None else c, StringType())
 
+news_df = news_df.withColumn('classificacao', remove_accents(news_df.classificacao))
+news_df = news_df.withColumn('conteudo', remove_accents(news_df.conteudo))
+news_df = news_df.withColumn('resumo', remove_accents(news_df.resumo))
+news_df = news_df.withColumn('titulo', remove_accents(news_df.titulo))
+
 # Null categories
 from pyspark.sql.functions import isnan, when, count, col
 
@@ -79,11 +84,6 @@ news_df = news_df.where(news_df.conteudo != '')
 
 
 ##############################
-
-news_df = news_df.withColumn('classificacao', remove_accents(news_df.classificacao))
-news_df = news_df.withColumn('conteudo', remove_accents(news_df.conteudo))
-news_df = news_df.withColumn('resumo', remove_accents(news_df.resumo))
-news_df = news_df.withColumn('titulo', remove_accents(news_df.titulo))
 
 # Group and count the categories present in the news
 news_df.groupBy('classificacao').count().sort(col("count").desc()).show()

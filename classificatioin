@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Sep 20 21:53:08 2017
+
+From: https://spark.apache.org/docs/2.1.0/mllib-decision-tree.html
+From: https://github.com/apache/spark/blob/master/python/pyspark/ml/classification.py
+
+# Run first preprocessing file
+
+@author: diego
+"""
+# Converting dataframe to label  point
+
+from pyspark.mllib.util import MLUtils
+from pyspark.mllib.regression import LabeledPoint
+
+# dataframe to rdd
+#news_rdd = news_df.rdd
+# rdd to labelpoint
+#news_lp = news_rdd.map(lambda line: LabeledPoint(line[0],[line[1:]]))
+# error cannot convert to float
+ 
+# Use StringIndex to transform to numeric value
+# From; https://blog.talentica.com/2017/03/21/handling-categorical-features-in-machine-learning/
+from pyspark.ml.feature import StringIndexer
+indexer = StringIndexer(inputCol="classificacao", outputCol="classificacaoIndex")
+news_indexed = indexer.fit(news_df).transform(news_df)
+ 
+#news_indexed.show(3)
+# The more frequent has the less index
+#+--------+-------------+--------------------+--------------------+--------------------+------------------+
+#|  codigo|classificacao|            conteudo|              resumo|              titulo|classificacaoIndex|
+#+--------+-------------+--------------------+--------------------+--------------------+------------------+
+#|23152808|     Economia|Os estragos da cr...|Os estragos da cr...|Crise reduz a cla...|               2.0|
+#|23152823|     Politica|O ministro-chefe ...|O ministro-chefe ...|Sai nova lista pa...|               0.0|
+#|23152825|    Violencia|"Da RedacaoMANAUS...|<br><br>Ainda de ...|<br><br>Quase um ...|               5.0|
+#+--------+-------------+--------------------+--------------------+--------------------+------------------+
+
+# OneHotEncoder
+from pyspark.ml.feature import OneHotEncoder
+enconder = OneHotEncoder(dropLast=False, inputCol="classificacaoIndex", outputCol="classificacaoVec")
+news_enc = encoder.transform(news_indexed)
+
+#news_enc.select("classificacao", "classificacaoVec").show(3)
+#+-------------+----------------+
+#|classificacao|classificacaoVec|
+#+-------------+----------------+
+#|     Economia|  (29,[2],[1.0])|
+#|     Politica|  (29,[0],[1.0])|
+#|    Violencia|  (29,[5],[1.0])|
+#+-------------+----------------+
+
+###################################################
+#Decision Tree
+
+
+
+
