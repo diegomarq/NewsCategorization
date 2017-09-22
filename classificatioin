@@ -70,6 +70,11 @@ data_cv_tk_cont = cv_model.transform(data_tk_cont)
 
 from pyspark.ml.classification import NaiveBayes
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.sql.functions import col
+
+data = data_cv_tk_cont
+
+data = data.select(col("idx_classificacao").alias("label"), col("cv_tk_conteudo").alias("features"))
 
 # Divide data
 splits = data.randomSplit([0.6, 0.4], 1234)
@@ -78,6 +83,8 @@ data_test = splits[1]
 
 nb = NaiveBayes(smoothing=1.0, modelType="multinomial")
 model = nb.fit(data_train)
+
+#conda install -c anaconda openblas 
 
 predictions = model.transform(data_test)
         

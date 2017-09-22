@@ -6,7 +6,7 @@ Created on Thu Sep 14 15:14:06
 From: https://spark.apache.org/docs/latest/ml-features.html
 From: https://www.nodalpoint.com/spark-data-frames-from-csv-files-handling-headers-column-types/
 
-Run with: PYSPARK_PYTHON=/home/diego/anaconda3/bin/python3.6 pyspark
+Run with: PYSPARK_PYTHON=/home/diego/anaconda3/bin/python3.6 pyspark --packages com.github.fommil.netlib:all:1.1.2
 
 @author: diego
 """
