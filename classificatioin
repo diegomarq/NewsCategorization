@@ -40,13 +40,14 @@ from pyspark.ml.feature import Tokenizer
 from pyspark.ml.feature import CountVectorizer
 
 #Get sample 15% from data
-data_s1 = news_df.sample(False, 0.15, 42)
-data_s2 = news_df.sample(False, 0.15, 43)
+#data_s1 = news_df.sample(False, 0.15, 42)
+#data_s2 = news_df.sample(False, 0.15, 43)
 #data_s1.count(),data_s2.count()
 #(106234, 105901)
 
 # Chose sample
-data = data_s2
+data = news_df
+#data = data_s2
 
 # StringIndex
 str_idx_model = StringIndexer(inputCol="classificacao", outputCol="idx_classificacao").fit(data)
@@ -77,22 +78,124 @@ data = data_cv_tk_cont
 data = data.select(col("idx_classificacao").alias("label"), col("cv_tk_conteudo").alias("features"))
 
 # Divide data
-splits = data.randomSplit([0.6, 0.4], 1234)
+splits = data.randomSplit([0.7, 0.3], 1234)
 data_train = splits[0]
 data_test = splits[1]
 
 nb = NaiveBayes(smoothing=1.0, modelType="multinomial")
-model = nb.fit(data_train)
+nv_m = nb.fit(data_train)
+predictions = nv_m.transform(data_test)
 
-#conda install -c anaconda openblas 
+evaluator_nv = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction",
+                                              metricName="accuracy")
+accuracy = evaluator_nv.evaluate(predictions)
+print("Test set accuracy = " + str(accuracy))
+# with data.count() 71113  
+# Test set accuracy = 0.6130736216573126
 
+
+###################################################
+# Random forest
+
+from pyspark.ml.feature import IndexToString, VectorAssembler
+from pyspark.ml import Pipeline
+from pyspark.ml.classification import RandomForestClassifier
+from pyspark.sql.functions import col
+#
+#
+#from pyspark.sql import DataFrame
+#from pyspark.ml.feature import VectorAssembler
+
+#def get_indexer_input(data):
+#    str_cols_value = {}
+#    for c, t in data[data.columns].dtypes:
+#        if t == 'string':
+#            str_cols_value[c] = StringIndexer(inputCol=c, outputCol='indexed_' + c).fit(data)
+#            return str_cols_value
+
+
+# number of categories
+# n_clas = data.groupBy('classificacao').count()
+
+data = data_cv_tk_cont
+
+assembler = VectorAssembler(inputCols=["cv_tk_conteudo"], outputCol="features")
+#data_asm = assembler.transform(data)
+#featureIndexer = VectorIndexer(inputCol="cv_tk_conteudo", outputCol="features", maxCategories=4).fit(data)
+
+data_idx_ft = data.select(col("idx_classificacao").alias("label"), col("cv_tk_conteudo"))
+
+#data_sel = data.select(col("classificacao").alias("label"), col("conteudo").alias("features"))
+#indexer_input = get_indexer_input(data_sel)
+
+# Divide data
+splits = data_idx_ft.randomSplit([0.7, 0.3], 1234)
+data_train = splits[0]
+data_test = splits[1]
+
+#x_cols = list(set(data_train.columns))
+#indexers = indexer_input.values()
+#pipeline_tr = Pipeline(stages=indexers)
+#data_tr = pipeline_tr.fit(data_train).transform(data_train)
+
+#assembler = VectorAssembler(inputCols=x_cols, outputCol="features_to_use")
+
+rf = RandomForestClassifier(labelCol="label", featuresCol="features", numTrees=3)
+
+# Convert indexed labels back to original labels.
+label_converter = IndexToString(inputCol="prediction", outputCol="prediction_label",
+                                labels=str_idx_model.labels)
+
+#feature_indexer = VectorIndexer(inputCol="features", outputCol="idx_features", maxCategories=n_clas).fit(data)
+
+# Chain indexers and forest in a Pipeline
+pipeline = Pipeline(stages=[str_idx_model, assembler, rf, label_converter])
+
+# Train model.  This also runs the indexers.
+rf_m = pipeline.fit(data_train)
+
+# Make predictions.
+predictions = rf_m.transform(data_test)
+
+evaluator_rf = MulticlassClassificationEvaluator(
+    labelCol="label", predictionCol="prediction", metricName="accuracy")
+accuracy = evaluator_rf.evaluate(predictions)
+print("Test Error = %g" % (1.0 - accuracy))
+
+###################################################
+# Decison Tree
+
+from pyspark.ml.feature import IndexToString, VectorAssembler
+from pyspark.ml import Pipeline
+from pyspark.sql.functions import col
+from pyspark.ml.classification import DecisionTreeClassifier
+
+data = data_cv_tk_cont
+
+assembler = VectorAssembler(inputCols=["cv_tk_conteudo"], outputCol="features")
+#data_asm = assembler.transform(data)
+
+data_idx_ft = data.select(col("idx_classificacao").alias("label"), col("cv_tk_conteudo"))
+
+splits = data_idx_ft.randomSplit([0.7, 0.3], 1234)
+data_train = splits[0]
+data_test = splits[1]
+
+dt = DecisionTreeClassifier(labelCol="label", featuresCol="features")
+
+pipeline = Pipeline(stages=[str_idx_model, assembler, dt])
+
+# Train model.  This also runs the indexers.
+model = pipeline.fit(data_train)
+
+# Make predictions.
 predictions = model.transform(data_test)
-        
 
+# Select example rows to display.
+predictions.select("prediction", "idx_classificacao", "features").show(5)
 
-
-
-
+# Select (prediction, true label) and compute test error
+evaluator = MulticlassClassificationEvaluator
 
 
 

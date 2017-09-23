@@ -25,6 +25,9 @@ news_df = spark.read.format("csv").option("header", "true").option("inferSchema"
 #news_df.count()
 # 714415
 
+news_complete_data = news_df
+news_df = news_complete_data.sample(False, 0.10, 42)
+
 # Remove extra spaces
 from pyspark.sql.functions import trim
 news_df = news_df.withColumn("classificacao", trim(news_df.classificacao))
@@ -152,7 +155,8 @@ news_df = news_df.where(news_df.conteudo != '')
 #cla_count_asc_df.count()
 #29                          
 
-
+# save data into csv file
+#news_df.select("codigo", "conteudo", "classificacao").toPandas().to_csv("/home/diego/Documents/Data/cod_cont_clas.csv")
 
 ##############################
 # Tokenizer dataframe column
