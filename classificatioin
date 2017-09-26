@@ -39,15 +39,7 @@ from pyspark.ml.feature import StringIndexer
 from pyspark.ml.feature import Tokenizer
 from pyspark.ml.feature import CountVectorizer
 
-#Get sample 15% from data
-#data_s1 = news_df.sample(False, 0.15, 42)
-#data_s2 = news_df.sample(False, 0.15, 43)
-#data_s1.count(),data_s2.count()
-#(106234, 105901)
-
-# Chose sample
 data = news_df
-#data = data_s2
 
 # StringIndex
 str_idx_model = StringIndexer(inputCol="classificacao", outputCol="idx_classificacao").fit(data)
@@ -65,6 +57,47 @@ data_tk_cont = tk_model.transform(data_idx_clas)
 # Count Vector
 cv_model = CountVectorizer().setInputCol("tk_conteudo").setOutputCol("cv_tk_conteudo").fit(data_tk_cont)
 data_cv_tk_cont = cv_model.transform(data_tk_cont)
+
+###################################################
+# Convert to libsvm
+
+# assembler vector
+from pyspark.ml.feature import VectorAssembler
+from pyspark.sql.functions import col
+
+from pyspark.mllib.linalg import Vectors
+from pyspark.mllib.feature import StandardScaler
+
+
+data_idx_cv = data_cv_tk_cont.select(col("idx_classificacao"), col("cv_tk_conteudo"))
+
+# Get data frame with columns of interesting with numerical value
+assembler_tmp = VectorAssembler(inputCols=["cv_tk_conteudo"], outputCol="features")
+data_tmp = assembler_tmp.transform(data_idx_cv)
+
+
+from pyspark.mllib import linalg as mllib_linalg
+from pyspark.ml import linalg as ml_linalg
+
+def as_old(v):
+    if isinstance(v, ml_linalg.SparseVector):
+        return mllib_linalg.SparseVector(v.size, v.indices, v.values)
+    if isinstance(v, ml_linalg.DenseVector):
+        return mllib_linalg.DenseVector(v.values)
+    raise ValueError("Unsupported type {0}".format(type(v)))
+
+# label point
+from pyspark.mllib.regression import LabeledPoint
+
+data_rdd_tmp = data_tmp.select(col("idx_classificacao").alias("label"), col("features")).rdd.map(
+        lambda row: LabeledPoint(row.label, as_old(row.features)))
+
+from pyspark.mllib.util import MLUtils
+data_df_tmp = MLUtils.saveAsLibSVMFile(data_rdd_tmp, "features")
+
+#data_df_tmp = SQLContext.CreateDataFrame("label_features")
+#data_df_tmp.write.format("libsvm").save("label_features.txt")
+
 
 ###################################################
 # Naive Bayes
@@ -101,24 +134,8 @@ from pyspark.ml.feature import IndexToString, VectorAssembler
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import RandomForestClassifier
 from pyspark.sql.functions import col
-#
-#
-#from pyspark.sql import DataFrame
-#from pyspark.ml.feature import VectorAssembler
-
-#def get_indexer_input(data):
-#    str_cols_value = {}
-#    for c, t in data[data.columns].dtypes:
-#        if t == 'string':
-#            str_cols_value[c] = StringIndexer(inputCol=c, outputCol='indexed_' + c).fit(data)
-#            return str_cols_value
-
-
-# number of categories
-# n_clas = data.groupBy('classificacao').count()
 
 data = data_cv_tk_cont
-
 assembler = VectorAssembler(inputCols=["cv_tk_conteudo"], outputCol="features")
 #data_asm = assembler.transform(data)
 #featureIndexer = VectorIndexer(inputCol="cv_tk_conteudo", outputCol="features", maxCategories=4).fit(data)
@@ -132,13 +149,6 @@ data_idx_ft = data.select(col("idx_classificacao").alias("label"), col("cv_tk_co
 splits = data_idx_ft.randomSplit([0.7, 0.3], 1234)
 data_train = splits[0]
 data_test = splits[1]
-
-#x_cols = list(set(data_train.columns))
-#indexers = indexer_input.values()
-#pipeline_tr = Pipeline(stages=indexers)
-#data_tr = pipeline_tr.fit(data_train).transform(data_train)
-
-#assembler = VectorAssembler(inputCols=x_cols, outputCol="features_to_use")
 
 rf = RandomForestClassifier(labelCol="label", featuresCol="features", numTrees=3)
 
