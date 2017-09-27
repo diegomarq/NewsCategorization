@@ -36,8 +36,9 @@ news_indexed = indexer.fit(news_df).transform(news_df)
 # Get features from dataframe and transform in a vector
 
 from pyspark.ml.feature import StringIndexer
-from pyspark.ml.feature import Tokenizer
-from pyspark.ml.feature import CountVectorizer
+#from pyspark.ml.feature import CountVectorizer
+from pyspark.ml.feature import HashingTF, IDF, Tokenizer
+from pyspark.sql.functions import col
 
 data = news_df
 
@@ -49,14 +50,40 @@ data_idx_clas = str_idx_model.transform(data)
 tk_model = Tokenizer(inputCol="conteudo", outputCol="tk_conteudo")
 data_tk_cont = tk_model.transform(data_idx_clas)
 
+#from pyspark.sql.functions import udf
+#from pyspark.sql.types import IntegerType
+
+#countTokens = udf(lambda words: len(words), IntegerType())
+
+hashingTF = HashingTF(inputCol="tk_conteudo", outputCol="v_conteudo", numFeatures=10000)
+data_v_cont = hashingTF.transform(data_tk_cont)
+
+
+idf = IDF(inputCol="v_conteudo", outputCol="features_conteudo")
+idfModel = idf.fit(data_v_cont)
+data_idf_cont = idfModel.transform(data_v_cont)
+
+
+
+#from pyspark.mllib.regression import LabeledPoint
+
+#data_rdd_tmp = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features")).rdd.map(
+#        lambda row: LabeledPoint(row.label, as_old(row.features)))
+
+
+#from pyspark.mllib.util import MLUtils
+#data_df_tmp = MLUtils.saveAsLibSVMFile(data_rdd_tmp, "/home/diego/Documents/Data/label_features_libsvm")
+
+#data_idf_cont.select("idx_classificacao", "features_conteudo").show(1)
+
 # Remove stop words
 # Count tokens and make avarage setting the vocabSize parameter
 
 # Make with sparse vector
 
 # Count Vector
-cv_model = CountVectorizer().setInputCol("tk_conteudo").setOutputCol("cv_tk_conteudo").fit(data_tk_cont)
-data_cv_tk_cont = cv_model.transform(data_tk_cont)
+#cv_model = CountVectorizer().setInputCol("tk_conteudo").setOutputCol("cv_tk_conteudo").fit(data_tk_cont)
+#data_cv_tk_cont = cv_model.transform(data_tk_cont)
 
 ###################################################
 # Convert to libsvm
@@ -106,9 +133,8 @@ from pyspark.ml.classification import NaiveBayes
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.sql.functions import col
 
-data = data_cv_tk_cont
+data = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features"))
 
-data = data.select(col("idx_classificacao").alias("label"), col("cv_tk_conteudo").alias("features"))
 
 # Divide data
 splits = data.randomSplit([0.7, 0.3], 1234)
@@ -124,7 +150,8 @@ evaluator_nv = MulticlassClassificationEvaluator(labelCol="label", predictionCol
 accuracy = evaluator_nv.evaluate(predictions)
 print("Test set accuracy = " + str(accuracy))
 # with data.count() 71113  
-# Test set accuracy = 0.6130736216573126
+# Test set accuracy = 0.6130736216573126 CountVectorizer
+# Test set accuracy = 0.6035466679243503 HashingTF + IDF
 
 
 ###################################################
