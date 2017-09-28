@@ -50,19 +50,12 @@ data_idx_clas = str_idx_model.transform(data)
 tk_model = Tokenizer(inputCol="conteudo", outputCol="tk_conteudo")
 data_tk_cont = tk_model.transform(data_idx_clas)
 
-#from pyspark.sql.functions import udf
-#from pyspark.sql.types import IntegerType
-
-#countTokens = udf(lambda words: len(words), IntegerType())
-
 hashingTF = HashingTF(inputCol="tk_conteudo", outputCol="v_conteudo", numFeatures=10000)
 data_v_cont = hashingTF.transform(data_tk_cont)
-
 
 idf = IDF(inputCol="v_conteudo", outputCol="features_conteudo")
 idfModel = idf.fit(data_v_cont)
 data_idf_cont = idfModel.transform(data_v_cont)
-
 
 
 #from pyspark.mllib.regression import LabeledPoint
@@ -74,12 +67,6 @@ data_idf_cont = idfModel.transform(data_v_cont)
 #from pyspark.mllib.util import MLUtils
 #data_df_tmp = MLUtils.saveAsLibSVMFile(data_rdd_tmp, "/home/diego/Documents/Data/label_features_libsvm")
 
-#data_idf_cont.select("idx_classificacao", "features_conteudo").show(1)
-
-# Remove stop words
-# Count tokens and make avarage setting the vocabSize parameter
-
-# Make with sparse vector
 
 # Count Vector
 #cv_model = CountVectorizer().setInputCol("tk_conteudo").setOutputCol("cv_tk_conteudo").fit(data_tk_cont)
@@ -157,46 +144,46 @@ print("Test set accuracy = " + str(accuracy))
 ###################################################
 # Random forest
 
-from pyspark.ml.feature import IndexToString, VectorAssembler
 from pyspark.ml import Pipeline
 from pyspark.ml.classification import RandomForestClassifier
-from pyspark.sql.functions import col
+from pyspark.ml.feature import IndexToString, StringIndexer, VectorIndexer
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 
-data = data_cv_tk_cont
-assembler = VectorAssembler(inputCols=["cv_tk_conteudo"], outputCol="features")
-#data_asm = assembler.transform(data)
-#featureIndexer = VectorIndexer(inputCol="cv_tk_conteudo", outputCol="features", maxCategories=4).fit(data)
 
-data_idx_ft = data.select(col("idx_classificacao").alias("label"), col("cv_tk_conteudo"))
+data = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features"))
 
-#data_sel = data.select(col("classificacao").alias("label"), col("conteudo").alias("features"))
-#indexer_input = get_indexer_input(data_sel)
+# StringIndex
+labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
 
-# Divide data
-splits = data_idx_ft.randomSplit([0.7, 0.3], 1234)
-data_train = splits[0]
-data_test = splits[1]
+# VectorIndexer
+featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=29).fit(data)
 
-rf = RandomForestClassifier(labelCol="label", featuresCol="features", numTrees=3)
+# Divide
+(trainingData, testData) = data.randomSplit([0.7, 0.3])
 
-# Convert indexed labels back to original labels.
-label_converter = IndexToString(inputCol="prediction", outputCol="prediction_label",
-                                labels=str_idx_model.labels)
+# Train
+rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=3)
 
-#feature_indexer = VectorIndexer(inputCol="features", outputCol="idx_features", maxCategories=n_clas).fit(data)
+# Convert indexed labels back to original labels
+labelConverter = IndexToString(inputCol="prediction", outputCol="predictedLabel",
+                               labels=labelIndexer.labels)
 
 # Chain indexers and forest in a Pipeline
-pipeline = Pipeline(stages=[str_idx_model, assembler, rf, label_converter])
+pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf, labelConverter])
 
 # Train model.  This also runs the indexers.
-rf_m = pipeline.fit(data_train)
+model = pipeline.fit(trainingData)
 
 # Make predictions.
-predictions = rf_m.transform(data_test)
+predictions = model.transform(testData)
 
-evaluator_rf = MulticlassClassificationEvaluator(
-    labelCol="label", predictionCol="prediction", metricName="accuracy")
-accuracy = evaluator_rf.evaluate(predictions)
+# Select example rows to display.
+predictions.select("predictedLabel", "label", "features").show(5)
+
+# Select (prediction, true label) and compute test error
+evaluator = MulticlassClassificationEvaluator(
+    labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
+accuracy = evaluator.evaluate(predictions)
 print("Test Error = %g" % (1.0 - accuracy))
 
 ###################################################
