@@ -26,7 +26,7 @@ news_df = spark.read.format("csv").option("header", "true").option("inferSchema"
 # 714415
 
 news_complete_data = news_df
-news_df = news_complete_data.sample(False, 0.10, 42)
+news_df = news_complete_data.sample(False, 0.05, 42)
 
 # Remove extra spaces
 from pyspark.sql.functions import trim

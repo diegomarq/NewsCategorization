@@ -39,6 +39,7 @@ from pyspark.ml.feature import StringIndexer
 #from pyspark.ml.feature import CountVectorizer
 from pyspark.ml.feature import HashingTF, IDF, Tokenizer
 from pyspark.sql.functions import col
+from pyspark.ml.feature import StopWordsRemover
 
 data = news_df
 
@@ -49,6 +50,10 @@ data_idx_clas = str_idx_model.transform(data)
 # Tokenize
 tk_model = Tokenizer(inputCol="conteudo", outputCol="tk_conteudo")
 data_tk_cont = tk_model.transform(data_idx_clas)
+
+# Remove stop words
+#remover = StopWordsRemover(inputCol="tk_conteudo", outputCol="filtered").loadDefaultStopWords("portuguese")
+#data_filt_cont = remover.transform(data_tk_cont)
 
 hashingTF = HashingTF(inputCol="tk_conteudo", outputCol="v_conteudo", numFeatures=10000)
 data_v_cont = hashingTF.transform(data_tk_cont)
@@ -189,53 +194,67 @@ print("Test Error = %g" % (1.0 - accuracy))
 ###################################################
 # Decison Tree
 
-from pyspark.ml.feature import IndexToString, VectorAssembler
 from pyspark.ml import Pipeline
-from pyspark.sql.functions import col
 from pyspark.ml.classification import DecisionTreeClassifier
+from pyspark.ml.feature import StringIndexer, VectorIndexer
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 
-data = data_cv_tk_cont
+data = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features"))
 
-assembler = VectorAssembler(inputCols=["cv_tk_conteudo"], outputCol="features")
-#data_asm = assembler.transform(data)
+# StringIndex
+labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
 
-data_idx_ft = data.select(col("idx_classificacao").alias("label"), col("cv_tk_conteudo"))
+# VectorIndexer
+featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=29).fit(data)
 
-splits = data_idx_ft.randomSplit([0.7, 0.3], 1234)
-data_train = splits[0]
-data_test = splits[1]
+# Divide
+(trainingData, testData) = data.randomSplit([0.7, 0.3])
 
-dt = DecisionTreeClassifier(labelCol="label", featuresCol="features")
 
-pipeline = Pipeline(stages=[str_idx_model, assembler, dt])
+# Train a DecisionTree model.
+dt = DecisionTreeClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures")
+
+# Chain indexers and tree in a Pipeline
+pipeline = Pipeline(stages=[labelIndexer, featureIndexer, dt])
 
 # Train model.  This also runs the indexers.
-model = pipeline.fit(data_train)
+model = pipeline.fit(trainingData)
 
 # Make predictions.
-predictions = model.transform(data_test)
+predictions = model.transform(testData)
 
 # Select example rows to display.
-predictions.select("prediction", "idx_classificacao", "features").show(5)
+predictions.select("prediction", "indexedLabel", "features").show(5)
 
 # Select (prediction, true label) and compute test error
-evaluator = MulticlassClassificationEvaluator
+evaluator = MulticlassClassificationEvaluator(
+    labelCol="indexedLabel", predictionCol="prediction", metricName="accuracy")
+accuracy = evaluator.evaluate(predictions)
+print("Test Error = %g " % (1.0 - accuracy))
 
+treeModel = model.stages[2]
+# summary only
+print(treeModel)
 
+###################################################
+# Logistic Regression
 
+from pyspark.ml.classification import LogisticRegression
 
+data = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features"))
 
+lr = LogisticRegression(maxIter=10, regParam=0.3, elasticNetParam=0.8)
 
+# Fit the model
+lrModel = lr.fit(data)
 
+# Print the coefficients and intercept for multinomial logistic regression
+#print("Coefficients: \n" + str(lrModel.coefficientMatrix))
+#Coefficients: 
+#29 X 10000 CSRMatrix
 
-
-
-
-
-
-
-
-#Decision Tree
+#print("Intercept: " + str(lrModel.interceptVector))
+#Intercept: [3.00949013553,2.53064462247,2.31269089788,1.92272825327,1.4310423319,1.16431295657,0.829351986282,0.761683264317,0.510676702575,0.443808166056,0.407185021423,0.382492843318,0.327323001104,0.212160677052,-0.389206713937,-0.403622431322,-0.413349608273,-0.528941455319,-0.562410037942,-0.632905748776,-0.636971710211,-0.687097571862,-0.783713110333,-1.15675369266,-1.36547289457,-1.4864380763,-1.50082821191,-2.75607887185,-2.94180072449]
 
 
 
