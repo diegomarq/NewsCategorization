@@ -24,18 +24,18 @@ from pyspark.sql.functions import *
 
 if __name__ == "__main__":    
     
-    sqlContext = SQLContext(sc)
+sqlContext = SQLContext(sc)
 
-    #news_complete_data = sqlContext.read.format('com.databricks.spark.csv').options(header='true', inferschema='true', delimiter=';').load('file:///home/lara/diegomarques/cod_clas_con_res_tit_semIne.csv')
-    news_complete_data = sqlContext.read.format('com.databricks.spark.csv').options(header='true', inferschema='true', delimiter=';').load('hdfs://cluster0.local:8020/hdfs/diegomarques/data/cod_clas_con_res_tit_semIne.csv')
-    
-    
-    # Spark 2.2.0 Upoad File into data frame
-    #news_complete_data = spark.read.format("csv").option("header", "true").option("inferSchema",
-    #                           "true").option("delimiter", ";").load("cod_clas_con_res_tit_semIne.csv")
-    
-    
-    news_df = news_complete_data.sample(False, 0.10, 42)
+#news_complete_data = sqlContext.read.format('com.databricks.spark.csv').options(header='true', inferschema='true', delimiter=';').load('file:///home/lara/diegomarques/cod_clas_con_res_tit_semIne.csv')
+news_complete_data = sqlContext.read.format('com.databricks.spark.csv').options(header='true', inferschema='true', delimiter=';').load('hdfs://cluster0.local:8020/hdfs/diegomarques/data/cod_clas_con_res_tit_semIne.csv')
+
+
+# Spark 2.2.0 Upoad File into data frame
+#news_complete_data = spark.read.format("csv").option("header", "true").option("inferSchema",
+#                           "true").option("delimiter", ";").load("cod_clas_con_res_tit_semIne.csv")
+
+
+news_df = news_complete_data.sample(False, 0.10, 42)
     
     # Remove extra spaces
 news_df = news_df.withColumn("classificacao", trim(news_df.classificacao))
@@ -230,7 +230,7 @@ test = splits[1]
 # specify layers for the neural network:
 # input layer of size 4 (features), two intermediate of size 5 and 4
 # and output of size 3 (classes)
-layers = [len(data.features), 8, 4, 29]
+layers = [10000, 100, 10, 29]
 # create the trainer and set its parameters
 trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234)
 # train the model
@@ -243,4 +243,5 @@ evaluator = MulticlassClassificationEvaluator(metricName="precision")
 
 
 print("Precision:" + str(evaluator.evaluate(predictionAndLabels)))
+# 0.553288779458
     sc.stop()
