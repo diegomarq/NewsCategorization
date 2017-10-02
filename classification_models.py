@@ -18,8 +18,7 @@ from pyspark.sql.types import *
 import numpy as np
 import unicodedata
 
-from pyspark.ml.feature import StringIndexer
-from pyspark.ml.feature import HashingTF, IDF, Tokenizer
+from pyspark.ml.feature import HashingTF, IDF, Tokenizer, StopWordsRemover, StringIndexer
 from pyspark.sql.functions import *    
 
 
@@ -181,7 +180,7 @@ data_idf_cont = idfModel.transform(data_v_cont)
     # Test Error = 0.680808
     
     ###################################################
-    # Random Forest
+    # Logistic Regression
     
     from pyspark.mllib.classification import LogisticRegressionWithLBFGS
     from pyspark.mllib.util import MLUtils
@@ -231,7 +230,7 @@ test = splits[1]
 # specify layers for the neural network:
 # input layer of size 4 (features), two intermediate of size 5 and 4
 # and output of size 3 (classes)
-layers = [17, 8, 4, 29]
+layers = [len(data.features), 8, 4, 29]
 # create the trainer and set its parameters
 trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234)
 # train the model
@@ -240,5 +239,8 @@ model = trainer.fit(train)
 result = model.transform(test)
 predictionAndLabels = result.select("prediction", "label")
 evaluator = MulticlassClassificationEvaluator(metricName="precision")
+
+
+
 print("Precision:" + str(evaluator.evaluate(predictionAndLabels)))
     sc.stop()
