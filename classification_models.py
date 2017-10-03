@@ -6,7 +6,7 @@ Created on Sat Sep 30 15:49:33 2017
 To use cluster it is necessary config hdfs with file
 From: https://stackoverflow.com/questions/27299923/how-to-load-local-file-in-sc-textfile-instead-of-hdfs
 
-Run command: pyspark --packages com.databricks:spark-csv_2.10:1.1.0
+Run command: pyspark --packages com.databricks:spark-csv_2.10:1.1.0 --executor-memory=2g
 
 @author: diego
 """
@@ -36,7 +36,7 @@ news_df = news_complete_data
 # Spark 2.2.0 Upoad File into data frame
 #news_complete_data = spark.read.format("csv").option("header", "true").option("inferSchema",
 #                           "true").option("delimiter", ";").load("cod_clas_con_res_tit_semIne.csv")
-news_df = news_complete_data.sample(False, 0.50, 1234L)
+news_df = news_complete_data.sample(False, 0.40, 1234L)
 
 # Remove extra spaces
 news_df = news_df.withColumn("classificacao", trim(news_df.classificacao))
@@ -71,6 +71,7 @@ news_df = news_df.withColumn('titulo', remove_accents(news_df.titulo))
 news_df = news_df.where(news_df.conteudo != '')
 # Total 100% = 709538
 # Total 50% = 354452
+# Total 40% = 283423
 
 # Calculate variance
 news_df_group = news_df.groupBy('classificacao').count().sort(col("count").desc())
@@ -78,20 +79,15 @@ news_df_group = news_df_group.withColumn('count', news_df_group['count'].cast(Fl
 news_df_group = news_df_group.select(col('count'))
 group_variance = news_df_group.agg(func.avg('count').alias('avg_variance')).rdd
 group_variance_df = sqlContext.createDataFrame(group_variance, news_df_group.schema)
+group_variance_df.show()
 
-# Total
-#+---------+
-#|    count|
-#+---------+
-#|24466.828| 156,418
-#+---------+
+#Total 100%
+#24466.828| 156,418
+#Total 50%
+#12222.482| 110,555
+#Total 40%
+#9773.207 | 98,859
 
-# 50%
-#+---------+
-#|    count|
-#+---------+
-#|12222.482| 110,555
-#+---------+
 
 
 ###################################################
@@ -118,7 +114,7 @@ ngram = NGram(n=3, inputCol="tk_conteudo", outputCol="ngrams")
 data_ngram = ngram.transform(data_tk_cont)
 
 # TF-IDF
-hashingTF = HashingTF(inputCol="tk_conteudo", outputCol="v_conteudo", numFeatures=50000)
+hashingTF = HashingTF(inputCol="tk_conteudo", outputCol="v_conteudo", numFeatures=10000)
 data_v_cont = hashingTF.transform(data_tk_cont)
 
 idf = IDF(inputCol="v_conteudo", outputCol="features_conteudo")
@@ -149,7 +145,7 @@ data_to_test = data_idf_cont.select(col("idx_classificacao").alias("label"), col
 data = data_to_test.rdd.map(lambda row: LabeledPoint(row.label, Vectors.dense(((row.features).toArray()))))   
     
     # Divide data
-splits = data.randomSplit([0.7, 0.3], 1234)
+splits = data.randomSplit([0.7, 0.3], 1234L)
 data_train = splits[0]
 data_test = splits[1]
     
@@ -174,13 +170,19 @@ print("Test set accuracy = " + str(accuracy))
 # Test set accuracy = 0.630712549234
 # 50%, 50000 features
 #Test set accuracy = 0.620083674123
+# 25%, 25000 features
+#Test set accuracy = 0.604404198783
 
 predictionAndLabels = data_test.map(lambda lp: (float(nb.predict(lp.features)), lp.label))
 
-metrics = MulticlassMetrics(predictionAndLabels)   
+metrics = MulticlassMetrics(predictionAndLabels)
 print("Recall NB = %s" % metrics.recall())
 print("Precision NB = %s" % metrics.precision())
 print("F1 measure NB = %s" % metrics.fMeasure())
+
+#Recall NB = 0.604404198783
+#Precision NB = 0.604404198783
+#F1 measure NB = 0.604404198783
     
     ###################################################
     # Random Forest
@@ -189,6 +191,7 @@ from pyspark.ml import Pipeline
 from pyspark.ml.classification import RandomForestClassifier
 from pyspark.ml.feature import StringIndexer, VectorIndexer
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.mllib.regression import LabeledPoint  
 
 data = data_to_test
 
@@ -199,10 +202,10 @@ labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(dat
 featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=29).fit(data)
 
 # Divide
-(trainingData, testData) = data.randomSplit([0.7, 0.3])
+(trainingData, testData) = data.randomSplit([0.7, 0.3], 1234L)
 
 # Train
-rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=5)
+rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=10)
 
 pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf])
 
@@ -215,8 +218,11 @@ evaluator = MulticlassClassificationEvaluator(
     labelCol="indexedLabel", predictionCol="prediction", metricName="precision")
 accuracy = evaluator.evaluate(predictions)
 print("Test Error = %g" % (1.0 - accuracy))
-   
-#Test Error = 0.689862
+
+# 5 folds
+#Test Error = 0.689862 
+# 6 folds
+#Test Error = 0.678046
     
     ###################################################
     # Logistic Regression
@@ -224,12 +230,16 @@ print("Test Error = %g" % (1.0 - accuracy))
 from pyspark.mllib.classification import LogisticRegressionWithLBFGS
 from pyspark.mllib.util import MLUtils
 from pyspark.mllib.evaluation import MulticlassMetrics
+from pyspark.mllib.linalg import Vectors
+from pyspark.mllib.regression import LabeledPoint  
+
+data_to_test = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features"))
 
 # Load training data in LIBSVM format
 data = data_to_test.rdd.map(lambda row: LabeledPoint(row.label, Vectors.dense(((row.features).toArray()))))   
 
 # Split data into training (60%) and test (40%)
-training, test = data.randomSplit([0.6, 0.4], seed=11L)
+training, test = data.randomSplit([0.6, 0.4], 1234L)
 training.cache()
 
 # Run training algorithm to build the model
@@ -263,13 +273,13 @@ from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 data = data_to_test
 
 # Split the data into train and test
-splits = data.randomSplit([0.6, 0.4], 1234)
+splits = data.randomSplit([0.6, 0.4], 1234L)
 train = splits[0]
 test = splits[1]
 # specify layers for the neural network:
 # input layer of size 4 (features), two intermediate of size 5 and 4
 # and output of size 3 (classes)
-layers = [50000, 500, 10, 29]
+layers = [25000, 500, 10, 29]
 # create the trainer and set its parameters
 trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234L)
 # train the model
