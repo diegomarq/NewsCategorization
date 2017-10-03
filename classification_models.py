@@ -21,6 +21,8 @@ import unicodedata
 from pyspark.ml.feature import HashingTF, IDF, Tokenizer, StopWordsRemover, StringIndexer
 from pyspark.sql.functions import *    
 
+from pyspark.sql import functions as func
+
 
 if __name__ == "__main__":    
     
@@ -29,15 +31,14 @@ sqlContext = SQLContext(sc)
 #news_complete_data = sqlContext.read.format('com.databricks.spark.csv').options(header='true', inferschema='true', delimiter=';').load('file:///home/lara/diegomarques/cod_clas_con_res_tit_semIne.csv')
 news_complete_data = sqlContext.read.format('com.databricks.spark.csv').options(header='true', inferschema='true', delimiter=';').load('hdfs://cluster0.local:8020/hdfs/diegomarques/data/cod_clas_con_res_tit_semIne.csv')
 
+news_df = news_complete_data
 
 # Spark 2.2.0 Upoad File into data frame
 #news_complete_data = spark.read.format("csv").option("header", "true").option("inferSchema",
 #                           "true").option("delimiter", ";").load("cod_clas_con_res_tit_semIne.csv")
+news_df = news_complete_data.sample(False, 0.50, 1234L)
 
-
-news_df = news_complete_data.sample(False, 0.10, 42)
-    
-    # Remove extra spaces
+# Remove extra spaces
 news_df = news_df.withColumn("classificacao", trim(news_df.classificacao))
 news_df = news_df.withColumn("conteudo", trim(news_df.conteudo))
 news_df = news_df.withColumn("resumo", trim(news_df.resumo))
@@ -68,6 +69,29 @@ news_df = news_df.withColumn('titulo', remove_accents(news_df.titulo))
 # Null categories
 # Get only conteudo not empty
 news_df = news_df.where(news_df.conteudo != '')
+# Total 100% = 709538
+# Total 50% = 354452
+
+# Calculate variance
+news_df_group = news_df.groupBy('classificacao').count().sort(col("count").desc())
+news_df_group = news_df_group.withColumn('count', news_df_group['count'].cast(FloatType()))
+news_df_group = news_df_group.select(col('count'))
+group_variance = news_df_group.agg(func.avg('count').alias('avg_variance')).rdd
+group_variance_df = sqlContext.createDataFrame(group_variance, news_df_group.schema)
+
+# Total
+#+---------+
+#|    count|
+#+---------+
+#|24466.828| 156,418
+#+---------+
+
+# 50%
+#+---------+
+#|    count|
+#+---------+
+#|12222.482| 110,555
+#+---------+
 
 
 ###################################################
@@ -83,7 +107,18 @@ data_idx_clas = str_idx_model.transform(data)
 tk_model = Tokenizer(inputCol="conteudo", outputCol="tk_conteudo")
 data_tk_cont = tk_model.transform(data_idx_clas)
 
-hashingTF = HashingTF(inputCol="tk_conteudo", outputCol="v_conteudo", numFeatures=10000)
+from pyspark.ml.feature import CountVectorizer
+data_vectorizer = CountVectorizer(inputCol="tk_conteudo", outputCol="vectorizer_conteudo").fit(data_tk_cont)
+len(data_vectorizer.vocabulary)
+#262144
+
+# N-gram
+from pyspark.ml.feature import NGram
+ngram = NGram(n=3, inputCol="tk_conteudo", outputCol="ngrams")
+data_ngram = ngram.transform(data_tk_cont)
+
+# TF-IDF
+hashingTF = HashingTF(inputCol="tk_conteudo", outputCol="v_conteudo", numFeatures=50000)
 data_v_cont = hashingTF.transform(data_tk_cont)
 
 idf = IDF(inputCol="v_conteudo", outputCol="features_conteudo")
@@ -98,31 +133,31 @@ data_idf_cont = idfModel.transform(data_v_cont)
     #from pyspark.ml.evaluation import MulticlassClassificationEvaluator
     
     #Spark 1.6.0
-    from pyspark.mllib.classification import NaiveBayes, NaiveBayesModel
+from pyspark.mllib.classification import NaiveBayes, NaiveBayesModel
+
+from pyspark.mllib.linalg import Vectors
+from pyspark.mllib.regression import LabeledPoint  
+
+from pyspark.mllib.util import MLUtils
+from pyspark.mllib.evaluation import MulticlassMetrics
     
-    from pyspark.mllib.linalg import Vectors
-    from pyspark.mllib.regression import LabeledPoint  
-    
-    from pyspark.mllib.util import MLUtils
-    from pyspark.mllib.evaluation import MulticlassMetrics
-    
-    data_to_test = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features"))
-    
-    # Spark 2.2.0
-    #data_to_test = MLUtils.convertVectorColumnsFrom(data_to_test, "features")
-    
-    data = data_to_test.rdd.map(lambda row: LabeledPoint(row.label, Vectors.dense(((row.features).toArray()))))   
+data_to_test = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features"))
+
+# Spark 2.2.0
+#data_to_test = MLUtils.convertVectorColumnsFrom(data_to_test, "features")
+
+data = data_to_test.rdd.map(lambda row: LabeledPoint(row.label, Vectors.dense(((row.features).toArray()))))   
     
     # Divide data
-    splits = data.randomSplit([0.7, 0.3], 1234)
-    data_train = splits[0]
-    data_test = splits[1]
+splits = data.randomSplit([0.7, 0.3], 1234)
+data_train = splits[0]
+data_test = splits[1]
     
     # Spark 2.2.0
     #nb = NaiveBayes(smoothing=1.0, modelType="multinomial")
     
     # Spark 1.6.0
-    nb = NaiveBayes.train(data_train)
+nb = NaiveBayes.train(data_train)
     
     # Spark 2.2.0
 #    nv_m = nb.fit(data_train)
@@ -130,86 +165,90 @@ data_idf_cont = idfModel.transform(data_v_cont)
 #    evaluator_nv = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="accuracy")
 #    accuracy = evaluator_nv.evaluate(predictions)
     
-    # Spark 1.6.0
-    predictions = data_test.map(lambda p: (nb.predict(p.features), p.label))
-    accuracy = 1.0 * predictions.filter(lambda (x, v): x == v).count() / data_test.count()
-    
-    print("Test set accuracy = " + str(accuracy))
-    
-    predictionAndLabels = data_test.map(lambda lp: (float(nb.predict(lp.features)), lp.label))
-    
-    metrics = MulticlassMetrics(predictionAndLabels)   
-    print("Recall NB = %s" % metrics.recall())
-    print("Precision NB = %s" % metrics.precision())
-    print("F1 measure NB = %s" % metrics.fMeasure())
+# Spark 1.6.0
+predictions = data_test.map(lambda p: (nb.predict(p.features), p.label))
+accuracy = 1.0 * predictions.filter(lambda (x, v): x == v).count() / data_test.count()
+
+print("Test set accuracy = " + str(accuracy))
+# 50%, 100000 features
+# Test set accuracy = 0.630712549234
+# 50%, 50000 features
+#Test set accuracy = 0.620083674123
+
+predictionAndLabels = data_test.map(lambda lp: (float(nb.predict(lp.features)), lp.label))
+
+metrics = MulticlassMetrics(predictionAndLabels)   
+print("Recall NB = %s" % metrics.recall())
+print("Precision NB = %s" % metrics.precision())
+print("F1 measure NB = %s" % metrics.fMeasure())
     
     ###################################################
     # Random Forest
     
-    from pyspark.ml import Pipeline
-    from pyspark.ml.classification import RandomForestClassifier
-    from pyspark.ml.feature import StringIndexer, VectorIndexer
-    from pyspark.ml.evaluation import MulticlassClassificationEvaluator
-    
-    data = data_to_test
-    
-    # StringIndex
-    labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
-    
-    # VectorIndexer
-    featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=29).fit(data)
-    
-    # Divide
-    (trainingData, testData) = data.randomSplit([0.7, 0.3])
-    
-    # Train
-    rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=3)
-    
-    pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf])
-    
-    model = pipeline.fit(trainingData)
-    
-    predictions = model.transform(testData)
-    
-    # Select (prediction, true label) and compute test error
-    evaluator = MulticlassClassificationEvaluator(
-        labelCol="indexedLabel", predictionCol="prediction", metricName="precision")
-    accuracy = evaluator.evaluate(predictions)
-    print("Test Error = %g" % (1.0 - accuracy))
-    
-    # Test Error = 0.680808
+from pyspark.ml import Pipeline
+from pyspark.ml.classification import RandomForestClassifier
+from pyspark.ml.feature import StringIndexer, VectorIndexer
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+
+data = data_to_test
+
+# StringIndex
+labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
+
+# VectorIndexer
+featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=29).fit(data)
+
+# Divide
+(trainingData, testData) = data.randomSplit([0.7, 0.3])
+
+# Train
+rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=5)
+
+pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf])
+
+model = pipeline.fit(trainingData)
+
+predictions = model.transform(testData)
+
+# Select (prediction, true label) and compute test error
+evaluator = MulticlassClassificationEvaluator(
+    labelCol="indexedLabel", predictionCol="prediction", metricName="precision")
+accuracy = evaluator.evaluate(predictions)
+print("Test Error = %g" % (1.0 - accuracy))
+   
+#Test Error = 0.689862
     
     ###################################################
     # Logistic Regression
     
-    from pyspark.mllib.classification import LogisticRegressionWithLBFGS
-    from pyspark.mllib.util import MLUtils
-    from pyspark.mllib.evaluation import MulticlassMetrics
-    
-    # Load training data in LIBSVM format
-    data = data_to_test.rdd.map(lambda row: LabeledPoint(row.label, Vectors.dense(((row.features).toArray()))))   
-    
-    # Split data into training (60%) and test (40%)
-    training, test = data.randomSplit([0.6, 0.4], seed=11L)
-    training.cache()
-    
-    # Run training algorithm to build the model
-    model = LogisticRegressionWithLBFGS.train(training, numClasses=29)
-    
-    # Compute raw scores on the test set
-    predictionAndLabels = test.map(lambda lp: (float(model.predict(lp.features)), lp.label))
-    
-    # Instantiate metrics object
-    metrics = MulticlassMetrics(predictionAndLabels)
-    
-    # Overall statistics
-    precision = metrics.precision()
-    recall = metrics.recall()
-    f1Score = metrics.fMeasure()
-    print("Summary Stats")
-    print("Precision = %s" % precision)
-    print("Recall = %s" % recall)
-    print("F1 Score = %s" % f1Score)
+from pyspark.mllib.classification import LogisticRegressionWithLBFGS
+from pyspark.mllib.util import MLUtils
+from pyspark.mllib.evaluation import MulticlassMetrics
+
+# Load training data in LIBSVM format
+data = data_to_test.rdd.map(lambda row: LabeledPoint(row.label, Vectors.dense(((row.features).toArray()))))   
+
+# Split data into training (60%) and test (40%)
+training, test = data.randomSplit([0.6, 0.4], seed=11L)
+training.cache()
+
+# Run training algorithm to build the model
+model = LogisticRegressionWithLBFGS.train(training, numClasses=29)
+
+# Compute raw scores on the test set
+predictionAndLabels = test.map(lambda lp: (float(model.predict(lp.features)), lp.label))
+
+# Instantiate metrics object
+metrics = MulticlassMetrics(predictionAndLabels)
+
+# Overall statistics
+precision = metrics.precision()
+recall = metrics.recall()
+f1Score = metrics.fMeasure()
+print("Summary Stats")
+print("Precision = %s" % precision)
+print("Recall = %s" % recall)
+print("F1 Score = %s" % f1Score)
     
     #0.604911584393
     
@@ -230,9 +269,9 @@ test = splits[1]
 # specify layers for the neural network:
 # input layer of size 4 (features), two intermediate of size 5 and 4
 # and output of size 3 (classes)
-layers = [10000, 100, 10, 29]
+layers = [50000, 500, 10, 29]
 # create the trainer and set its parameters
-trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234)
+trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234L)
 # train the model
 model = trainer.fit(train)
 # compute precision on the test set
