@@ -25,7 +25,7 @@ from pyspark.sql import functions as func
 
 
 if __name__ == "__main__":    
-    
+
 sqlContext = SQLContext(sc)
 
 #news_complete_data = sqlContext.read.format('com.databricks.spark.csv').options(header='true', inferschema='true', delimiter=';').load('file:///home/lara/diegomarques/cod_clas_con_res_tit_semIne.csv')
@@ -36,7 +36,7 @@ news_df = news_complete_data
 # Spark 2.2.0 Upoad File into data frame
 #news_complete_data = spark.read.format("csv").option("header", "true").option("inferSchema",
 #                           "true").option("delimiter", ";").load("cod_clas_con_res_tit_semIne.csv")
-news_df = news_complete_data.sample(False, 0.40, 1234L)
+news_df = news_complete_data.sample(False, 0.10, 1234L)
 
 # Remove extra spaces
 news_df = news_df.withColumn("classificacao", trim(news_df.classificacao))
@@ -72,9 +72,17 @@ news_df = news_df.where(news_df.conteudo != '')
 # Total 100% = 709538
 # Total 50% = 354452
 # Total 40% = 283423
+# Total 35% = 248081
+# Total 30% = 212497
+# Total 25% = 177110
+# Total 20% = 141899
+# Total 15% = 106560
+# Total 10% = 70904
 
 # Calculate variance
 news_df_group = news_df.groupBy('classificacao').count().sort(col("count").desc())
+news_df_group.count()
+
 news_df_group = news_df_group.withColumn('count', news_df_group['count'].cast(FloatType()))
 news_df_group = news_df_group.select(col('count'))
 group_variance = news_df_group.agg(func.avg('count').alias('avg_variance')).rdd
@@ -87,8 +95,18 @@ group_variance_df.show()
 #12222.482| 110,555
 #Total 40%
 #9773.207 | 98,859
-
-
+#Total 35%
+#8554.518 | 92,490
+#Total 30%
+#7327.483 | 85,600
+#Total 25%
+#6107.241 | 78,148
+#Total 20%
+#4893.069 | 69,950
+#Total 15%
+#3674.4827 | 60,617
+#Total 10%
+#2444.9656 | 49,446
 
 ###################################################
 # Get features from dataframe and transform in a vector  
@@ -103,18 +121,18 @@ data_idx_clas = str_idx_model.transform(data)
 tk_model = Tokenizer(inputCol="conteudo", outputCol="tk_conteudo")
 data_tk_cont = tk_model.transform(data_idx_clas)
 
-from pyspark.ml.feature import CountVectorizer
-data_vectorizer = CountVectorizer(inputCol="tk_conteudo", outputCol="vectorizer_conteudo").fit(data_tk_cont)
-len(data_vectorizer.vocabulary)
+#from pyspark.ml.feature import CountVectorizer
+#data_vectorizer = CountVectorizer(inputCol="tk_conteudo", outputCol="vectorizer_conteudo").fit(data_tk_cont)
+#len(data_vectorizer.vocabulary)
 #262144
 
 # N-gram
-from pyspark.ml.feature import NGram
-ngram = NGram(n=3, inputCol="tk_conteudo", outputCol="ngrams")
-data_ngram = ngram.transform(data_tk_cont)
+#from pyspark.ml.feature import NGram
+#ngram = NGram(n=3, inputCol="tk_conteudo", outputCol="ngrams")
+#data_ngram = ngram.transform(data_tk_cont)
 
 # TF-IDF
-hashingTF = HashingTF(inputCol="tk_conteudo", outputCol="v_conteudo", numFeatures=10000)
+hashingTF = HashingTF(inputCol="tk_conteudo", outputCol="v_conteudo", numFeatures=5000)
 data_v_cont = hashingTF.transform(data_tk_cont)
 
 idf = IDF(inputCol="v_conteudo", outputCol="features_conteudo")
@@ -219,10 +237,10 @@ evaluator = MulticlassClassificationEvaluator(
 accuracy = evaluator.evaluate(predictions)
 print("Test Error = %g" % (1.0 - accuracy))
 
-# 5 folds
+# 5 folds, 50%
 #Test Error = 0.689862 
-# 6 folds
-#Test Error = 0.678046
+# 6 folds, 40%
+#Test Error = 0.678046 
     
     ###################################################
     # Logistic Regression
@@ -239,7 +257,7 @@ data_to_test = data_idf_cont.select(col("idx_classificacao").alias("label"), col
 data = data_to_test.rdd.map(lambda row: LabeledPoint(row.label, Vectors.dense(((row.features).toArray()))))   
 
 # Split data into training (60%) and test (40%)
-training, test = data.randomSplit([0.6, 0.4], 1234L)
+training, test = data.randomSplit([0.7, 0.4], 1234L)
 training.cache()
 
 # Run training algorithm to build the model
@@ -260,7 +278,17 @@ print("Precision = %s" % precision)
 print("Recall = %s" % recall)
 print("F1 Score = %s" % f1Score)
     
-    #0.604911584393
+#10%, 10000 features
+#Precision = 0.604911584393
+# 30%, 1000 features
+#Precision = 0.570937364476
+    
+#Step Size: 1.000
+#INFO optimize.LBFGS: Val and Grad Norm: 1.96684 (rel: 1.05e-05) 0.00462117
+
+#10%, 5000
+#Grad Norm: 1.35575 (rel: 3.98e-06) 0.00392328
+#Precision = 0.593742730868
     
     ###################################################
     # Multilayer perceptron classifier
@@ -273,13 +301,13 @@ from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 data = data_to_test
 
 # Split the data into train and test
-splits = data.randomSplit([0.6, 0.4], 1234L)
+splits = data.randomSplit([0.7, 0.3], 1234L)
 train = splits[0]
 test = splits[1]
 # specify layers for the neural network:
 # input layer of size 4 (features), two intermediate of size 5 and 4
 # and output of size 3 (classes)
-layers = [25000, 500, 10, 29]
+layers = [5000, 500, 10, 29]
 # create the trainer and set its parameters
 trainer = MultilayerPerceptronClassifier(maxIter=100, layers=layers, blockSize=128, seed=1234L)
 # train the model
