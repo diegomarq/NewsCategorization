@@ -297,6 +297,8 @@ print("F1 Score = %s" % f1Score)
 from pyspark.ml.classification import MultilayerPerceptronClassifier
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 
+data_to_test = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features"))
+
 # Load training data
 data = data_to_test
 
