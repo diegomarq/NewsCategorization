@@ -70,6 +70,16 @@ news_df = news_df.withColumn('titulo', remove_accents(news_df.titulo))
 # Null categories
 # Get only conteudo not empty
 news_df = news_df.where(news_df.conteudo != '')
+news_df = news_df.where(news_df.resumo != '')
+
+news_dfC2 = news_df.where(news_df.conteudo != '')
+news_dfR1 = news_df.where(news_df.resumo != '')
+
+# Total without resume
+# 709664
+news_df = news_dfC2
+news_df = news_dfR1
+
 news_df = news_df.where(news_df.classificacao != 'Producao')
 news_df = news_df.where(news_df.classificacao != 'Mineracao')
 news_df = news_df.where(news_df.classificacao != 'Especial')
@@ -128,29 +138,127 @@ count_news_df = news_df.groupBy('classificacao').count().sort(col("count").asc()
 #|   Judiciario|114835| 0,2305
 #|     Politica|187803| 0,3769
 #+-------------+------+
+#
+#+-------------+------+
+#|classificacao| count|avg
+#+-------------+------+-----
+#|     Educacao| 38343|
+#|        Saude| 63751|
+#|     Economia| 93450|
+#|   Judiciario|114856|
+#|     Politica|187862|
+#+-------------+------+
 
-count_news_df.groupBy('classificacao').agg(stddev('Count'))
+news_df = news_df.where(news_df.classificacao != 'Educacao')
+news_df = news_df.where(news_df.classificacao != 'Saude')
+news_df = news_df.where(news_df.classificacao != 'Economia')
+news_df = news_df.where(news_df.classificacao != 'Judiciario')
+news_df = news_df.where(news_df.classificacao != 'Politica')
+
+#count_news_df.withColumn('count', stddev('count'))
 
 total_rows = news_df.count()
 #Total 498163
 
+#+-------------+------+
+#|classificacao| count| avg
+#+-------------+------+-------
+#|     Educacao| 38337| 0,0769
+#|        Saude| 63747| 0,1279
+#|     Economia| 93441| 0,1875
+#|   Judiciario|114835| 0,2305
+#|     Politica|187803| 0,3769
+#+-------------+------+
 
-# Total 100% = 709538
-# Total 50% = 354452
-# Total 40% = 283423
-# Total 35% = 248081
-# Total 30% = 212497
-# Total 25% = 177110
-# Total 20% = 141899
-# Total 15% = 106560
-# Total 10% = 70904
+#Total 152084
 
+#+--------------+-----+
+#| classificacao|count| mean
+#+--------------+-----+------
+#|       Cultura|11146|0,0732
+#|      Trabalho|12736|0,0837
+#|Infraestrutura|13608|0,0894
+#|       Energia|13987|0,0919
+#|    Transporte|14276|0,0938
+#|       Esporte|15672|0,1030
+#|   Agronegocio|20053|0,1318
+#| Meio Ambiente|20939|0,1376
+#|     Violencia|29667|0,1950
+#+--------------+-----+
 
+#Total 58011
+
+#+-----------------+-----+
+#|    classificacao|count|
+#+-----------------+-----+
+#|         Especial| 1970|
+#|          Credito| 2062|
+#|Comercio Exterior| 2477|
+#|          Consumo| 2926|
+#|         Petroleo| 4237|
+#|  Turismo e lazer| 4641|
+#|       Legislacao| 5286|
+#|      Previdencia| 5290|
+#| Telecomunicacoes| 5329|
+#|  Contas Publicas| 5419|
+#|          Aviacao| 6082|
+#|        Habitacao| 6146|
+#|     Politica GDF| 6146|
+#+-----------------+-----+
+
+#---------------------------------------
+# Resumo
+#Total 498262
+
+#+-------------+------+
+#|classificacao| count|avg
+#+-------------+------+-----
+#|     Educacao| 38343|0,0769
+#|        Saude| 63751|0,1279
+#|     Economia| 93450|0,1875
+#|   Judiciario|114856|0,2305
+#|     Politica|187862|0,3770
+#+-------------+------+
+
+#Total 152102
+
+#+--------------+-----+
+#| classificacao|count|
+#+--------------+-----+
+#|       Cultura|11147|
+#|      Trabalho|12737|
+#|Infraestrutura|13611|
+#|       Energia|13988|
+#|    Transporte|14276|
+#|       Esporte|15673|
+#|   Agronegocio|20057|
+#| Meio Ambiente|20945|
+#|     Violencia|29668|
+#+--------------+-----+
+
+#Total 58020
+
+#+-----------------+-----+
+#|    classificacao|count|
+#+-----------------+-----+
+#|         Especial| 1970|
+#|          Credito| 2062|
+#|Comercio Exterior| 2479|
+#|          Consumo| 2926|
+#|         Petroleo| 4237|
+#|  Turismo e lazer| 4641|
+#|       Legislacao| 5288|
+#|      Previdencia| 5291|
+#| Telecomunicacoes| 5329|
+#|  Contas Publicas| 5419|
+#|          Aviacao| 6084|
+#|     Politica GDF| 6146|
+#|        Habitacao| 6148|
+#+-----------------+-----+
 
 ###################################################
 # Get features from dataframe and transform in a vector  
-newsGroup1 = news_df
-data = newsGroup1
+data = news_df
 
 # StringIndex
 str_idx_model = StringIndexer(inputCol="classificacao", outputCol="idx_classificacao").fit(data)
@@ -158,6 +266,7 @@ data_idx_clas = str_idx_model.transform(data)
 
 #data_idx_clas.groupBy('idx_classificacao').count().sort(col("count").asc()).show()
 
+#Group1
 #+-----------------+------+
 #|idx_classificacao| count|
 #+-----------------+------+
@@ -168,8 +277,34 @@ data_idx_clas = str_idx_model.transform(data)
 #|              0.0|187803|
 #+-----------------+------+
 
+#Group2
+
+#+-----------------+-----+
+#|idx_classificacao|count|
+#+-----------------+-----+
+#|              8.0|11146|
+#|              7.0|12736|
+#|              6.0|13608|
+#|              5.0|13987|
+#|              4.0|14276|
+#|              3.0|15672|
+#|              2.0|20053|
+#|              1.0|20939|
+#|              0.0|29667|
+#+-----------------+-----+
+
+
 # Get stratified sample
+#Group1
 newsSampled = data_idx_clas.sampleBy('idx_classificacao', fractions={0.0: .3769, 1.0: .2305, 2.0: .1875, 3.0: .1279, 4.0: .0769}, seed=1234L)
+
+#Group2
+newsSampled = data_idx_clas.sampleBy('idx_classificacao', fractions={
+        0.0: .1950, 1.0: .1376, 2.0: .1318, 3.0: .1030, 4.0: .0938, 5.0: .0919, 6.0: .0894, 7.0: .0837, 8.0: .0732}, seed=1234L)
+    
+data_idx_clas = newsSampled
+
+# Total 18649 Group 1 text
 #newsSampled.groupBy('idx_classificacao').count().show()
 
 #+-----------------+-----+
@@ -182,19 +317,32 @@ newsSampled = data_idx_clas.sampleBy('idx_classificacao', fractions={0.0: .3769,
 #|              2.0|17424|
 #+-----------------+-----+
 
+#-------------------------------------
+# Resumo
 
-newsSample.stddev('').show()
+#Total 125729 Group 1 resume
+#
+#+-----------------+-----+
+#|idx_classificacao|count|
+#+-----------------+-----+
+#|              1.0|26407|
+#|              3.0| 8056|
+#|              0.0|70719|
+#|              4.0| 2958|
+#|              2.0|17589|
+#+-----------------+-----+
 
-data_idx_clas = newsSampled
+
 
 # Tokenize
-tk_model = Tokenizer(inputCol="conteudo", outputCol="tk_conteudo")
+tk_model = Tokenizer(inputCol="resumo", outputCol="tk_conteudo")
 data_tk_cont = tk_model.transform(data_idx_clas)
 
 #from pyspark.ml.feature import CountVectorizer
 #data_vectorizer = CountVectorizer(inputCol="tk_conteudo", outputCol="vectorizer_conteudo").fit(data_tk_cont)
 #len(data_vectorizer.vocabulary)
-#262144
+#262144 text
+#128426 resume
 
 # N-gram
 #from pyspark.ml.feature import NGram
@@ -281,8 +429,11 @@ predictions = data_test.map(lambda p: (nb.predict(p.features), p.label))
 accuracy = 1.0 * predictions.filter(lambda (x, v): x == v).count() / data_test.count()
 
 print("Test set accuracy = " + str(accuracy))
-
+# Group1 5000
 #Test set accuracy = 0.716342195426
+
+#Group2 5000
+#Test set accuracy = 0.771616829386
 
 predictionAndLabels = data_test.map(lambda lp: (float(nb.predict(lp.features)), lp.label))
 
@@ -291,13 +442,87 @@ metrics = MulticlassMetrics(predictionAndLabels)
 # Statistics by class
 labels = data.map(lambda lp: lp.label).distinct().collect()
 for label in sorted(labels):    
-    print("Class %s recall = %s" % (label, metrics.recall(label)))
-    
-#Class 0.0 recall = 0.680546396609
-#Class 1.0 recall = 0.695679716204
-#Class 2.0 recall = 0.804967979818
-#Class 3.0 recall = 0.861762328213
-#Class 4.0 recall = 0.834628190899
+    #print("Class %s recall = %s" % (label, metrics.recall(label)))
+    print("Class %s F1 Measure = %s" % (label, metrics.fMeasure(label, beta=1.0)))
+
+#################################
+#Group 1
+#
+#Class 0.0 F1 Measure = 0.714826650912
+#Class 1.0 F1 Measure = 0.554560073513
+#Class 2.0 F1 Measure = 0.632405063291
+#Class 3.0 F1 Measure = 0.605682378059
+#Class 4.0 F1 Measure = 0.431834929993
+
+#################################
+#Group2
+#
+#Class 0.0 F1 Measure = 0.847535132724
+#Class 1.0 F1 Measure = 0.704680566022
+#Class 2.0 F1 Measure = 0.830052162208
+#Class 3.0 F1 Measure = 0.887329931973
+#Class 4.0 F1 Measure = 0.712300447915
+#Class 5.0 F1 Measure = 0.767953716514
+#Class 6.0 F1 Measure = 0.597677826626
+#Class 7.0 F1 Measure = 0.716055756324
+#Class 8.0 F1 Measure = 0.796762069962
+
+#################################
+#Group3
+#
+#Class 0.0 F1 Measure = 0.705817782656
+#Class 1.0 F1 Measure = 0.738675958188
+#Class 2.0 F1 Measure = 0.821449616971
+#Class 3.0 F1 Measure = 0.612220566319
+#Class 4.0 F1 Measure = 0.804979253112
+#Class 5.0 F1 Measure = 0.782465392221
+#Class 6.0 F1 Measure = 0.548092084516
+#Class 7.0 F1 Measure = 0.723880597015
+#Class 8.0 F1 Measure = 0.770708283313
+#Class 9.0 F1 Measure = 0.547281323877
+#Class 10.0 F1 Measure = 0.728802588997
+#Class 11.0 F1 Measure = 0.481298517996
+#Class 12.0 F1 Measure = 0.383004926108
+
+#################################
+# Resumo
+#Group1
+
+#Class 0.0 F1 Measure = 0.691175265616
+#Class 1.0 F1 Measure = 0.543088861661
+#Class 2.0 F1 Measure = 0.597963540811
+#Class 3.0 F1 Measure = 0.532303813426
+#Class 4.0 F1 Measure = 0.390501319261
+
+#################################
+# Group2
+
+#Class 0.0 F1 Measure = 0.72855972856
+#Class 1.0 F1 Measure = 0.525715244567
+#Class 2.0 F1 Measure = 0.646038365304
+#Class 3.0 F1 Measure = 0.734880816072
+#Class 4.0 F1 Measure = 0.549019607843
+#Class 5.0 F1 Measure = 0.62236102436
+#Class 6.0 F1 Measure = 0.427049456095
+#Class 7.0 F1 Measure = 0.53531598513
+#Class 8.0 F1 Measure = 0.572964034725
+
+##################################
+#Group3
+#Class 0.0 F1 Measure = 0.528412419449
+#Class 1.0 F1 Measure = 0.612750885478
+#Class 2.0 F1 Measure = 0.660508083141
+#Class 3.0 F1 Measure = 0.460485376478
+#Class 4.0 F1 Measure = 0.605194805195
+#Class 5.0 F1 Measure = 0.619032153297
+#Class 6.0 F1 Measure = 0.416666666667
+#Class 7.0 F1 Measure = 0.530669470733
+#Class 8.0 F1 Measure = 0.594122319301
+#Class 9.0 F1 Measure = 0.375366568915
+#Class 10.0 F1 Measure = 0.465495608532
+#Class 11.0 F1 Measure = 0.344594594595
+#Class 12.0 F1 Measure = 0.245501285347
+
 
 # Weighted stats
 print("Weighted recall = %s" % metrics.weightedRecall)
@@ -305,11 +530,67 @@ print("Weighted precision = %s" % metrics.weightedPrecision)
 print("Weighted F(1) Score = %s" % metrics.weightedFMeasure())
 print("Weighted F(0.5) Score = %s" % metrics.weightedFMeasure(beta=0.5))
 print("Weighted false positive rate = %s" % metrics.weightedFalsePositiveRate)
+print("Weighted false positive rate = %s" % metrics.weightedTruePositiveRate)
 
-#Weighted precision = 0.751056405489
-#Weighted false positive rate = 0.123613762317
-#Weighted false positive rate = 0.716342195426
-    
+#Group1
+#Weighted recall = 0.645773020637
+#Weighted precision = 0.692977161397
+#Weighted F(1) Score = 0.656004813298
+#Weighted F(0.5) Score = 0.674842676243
+#Weighted false positive rate = 0.142221079593
+#Weighted false positive rate = 0.645773020637
+
+
+################################
+#Group2
+
+#Weighted recall = 0.771616829386
+#Weighted precision = 0.775229941593
+#Weighted F(1) Score = 0.772604843477
+#Weighted F(0.5) Score = 0.773983721681
+#Weighted false positive rate = 0.0301535837941
+#Weighted true positive rate = 0.771616829386
+
+##############################
+#Group3
+#Weighted recall = 0.687908309456
+#Weighted precision = 0.707899192528
+#Weighted F(1) Score = 0.694973240807
+#Weighted F(0.5) Score = 0.702092207138
+#Weighted false positive rate = 0.0256636782179
+#Weighted true positive rate = 0.687908309456
+
+#################################
+# Resumo
+#Group1
+#Weighted recall = 0.616906570351
+#Weighted precision = 0.672445289244
+#Weighted F(1) Score = 0.629393909864
+#Weighted F(0.5) Score = 0.651442257844
+#Weighted false positive rate = 0.148148487969
+#Weighted true positive rate = 0.616906570351
+
+#################################
+#Group2
+
+#Weighted recall = 0.607052180004
+#Weighted precision = 0.614180122241
+#Weighted F(1) Score = 0.609314732612
+#Weighted F(0.5) Score = 0.611930995376
+#Weighted false positive rate = 0.0504114794602
+#Weighted true positive rate = 0.607052180004
+
+#################################
+#Group3
+
+#Weighted recall = 0.520600538651
+#Weighted precision = 0.540277632187
+#Weighted F(1) Score = 0.527929911377
+#Weighted F(0.5) Score = 0.534756042945
+#Weighted false positive rate = 0.0401837865892
+#Weighted true positive rate = 0.520600538651
+
+
     ###################################################
     # Random Forest
     
@@ -319,19 +600,21 @@ from pyspark.ml.feature import StringIndexer, VectorIndexer
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.mllib.regression import LabeledPoint  
 
+data_to_test = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features"))
+
 data = data_to_test
 
 # StringIndex
 labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
 
 # VectorIndexer
-featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=4).fit(data)
+featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=5).fit(data)
 
 # Divide
 (trainingData, testData) = data.randomSplit([0.7, 0.3], 1234L)
 
 # Train
-rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=6)
+rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=5, impurity='entropy')
 
 pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf])
 
@@ -340,14 +623,56 @@ model = pipeline.fit(trainingData)
 predictions = model.transform(testData)
 
 # Select (prediction, true label) and compute test error
-evaluator = MulticlassClassificationEvaluator(
-    labelCol="indexedLabel", predictionCol="prediction", metricName="recall")
+evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="precision")
+metric = evaluator.evaluate(predictions)
+print("precision = %g" % (metric))
+
+evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="recall")
 metric = evaluator.evaluate(predictions)
 print("recall = %g" % (metric))
 
-#recall = 0.570034
-#weightedPrecision = 0.58534
-#Test Error = 0.429966
+evaluator = MulticlassClassificationEvaluator(labelCol="indexedLabel", predictionCol="prediction", metricName="f1")
+metric = evaluator.evaluate(predictions)
+print("f1 = %g" % (metric))
+
+
+#################################
+#Group 1 5000 n= 5
+#With 5 trees and impurity entropy
+
+#precision = 0.561813
+#recall = 0.561813
+#f1 = 0.405899
+
+##################################
+#Group 2 5000 n = 9
+#precision = 0.372329
+#recall = 0.372329
+#f1 = 0.312261
+
+#################################
+#Group 3 5000
+#precision = 0.343658
+#recall = 0.343658
+#f1 = 0.310159
+
+#################################
+#Resumo
+#Group 1 2000
+#precision = 0.562485
+#recall = 0.562485
+#f1 = 0.405989
+
+#Group2
+#precision = 0.267641
+#recall = 0.267641
+#f1 = 0.199582
+
+#Group3
+#precision = 0.227163
+#recall = 0.227163
+#f1 = 0.211459
+
 
 ###############
 # Cross Validation
@@ -356,6 +681,8 @@ from pyspark.ml import Pipeline
 from pyspark.ml.classification import RandomForestClassifier
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+
+data_to_test = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features"))
 
 data = data_to_test
 
@@ -369,18 +696,21 @@ featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures",
 (trainingData, testData) = data.randomSplit([0.7, 0.3], 1234L)
 
 rf = RandomForestClassifier(labelCol="label", featuresCol="features")
+
 evaluator = MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("prediction").setMetricName('accuracy') 
 
 pipeline = Pipeline(stages=[rf])
 
 
-paramGrid = ParamGridBuilder().addGrid(5000, [4, 5, 6]).build()
+paramGrid = ParamGridBuilder().addGrid(rf.numTrees, [5, 6, 7]).build()
 
 crossval = CrossValidator(
     estimator=pipeline,
     estimatorParamMaps=paramGrid,
     evaluator=evaluator,
-    numFolds=6)
+    numFolds=2)
+
+
 
 model = crossval.fit(trainingData).bestModel
 pr = model.transform(trainingData)
@@ -406,7 +736,7 @@ training, test = data.randomSplit([0.7, 0.4], 1234L)
 training.cache()
 
 # Run training algorithm to build the model
-model = LogisticRegressionWithLBFGS.train(training, numClasses=29)
+model = LogisticRegressionWithLBFGS.train(training, numClasses=9)
 
 # Compute raw scores on the test set
 predictionAndLabels = test.map(lambda lp: (float(model.predict(lp.features)), lp.label))
@@ -434,6 +764,8 @@ print("F1 Score = %s" % f1Score)
 #10%, 5000
 #Grad Norm: 1.35575 (rel: 3.98e-06) 0.00392328
 #Precision = 0.593742730868
+
+# With not 
     
     ###################################################
     # Multilayer perceptron classifier
