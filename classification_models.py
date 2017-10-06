@@ -6,7 +6,7 @@ Created on Sat Sep 30 15:49:33 2017
 To use cluster it is necessary config hdfs with file
 From: https://stackoverflow.com/questions/27299923/how-to-load-local-file-in-sc-textfile-instead-of-hdfs
 
-Run command: pyspark --packages com.databricks:spark-csv_2.10:1.1.0 --executor-memory=2g
+Run command: pyspark --packages com.databricks:spark-csv_2.10:1.1.0 --executor-memory=1664M
 
 @author: diego
 """
@@ -36,7 +36,8 @@ news_df = news_complete_data
 # Spark 2.2.0 Upoad File into data frame
 #news_complete_data = spark.read.format("csv").option("header", "true").option("inferSchema",
 #                           "true").option("delimiter", ";").load("cod_clas_con_res_tit_semIne.csv")
-news_df = news_complete_data.sample(False, 0.10, 1234L)
+
+#news_df = news_complete_data.sample(False, 0.10, 1234L)
 
 # Remove extra spaces
 news_df = news_df.withColumn("classificacao", trim(news_df.classificacao))
@@ -69,6 +70,71 @@ news_df = news_df.withColumn('titulo', remove_accents(news_df.titulo))
 # Null categories
 # Get only conteudo not empty
 news_df = news_df.where(news_df.conteudo != '')
+news_df = news_df.where(news_df.classificacao != 'Producao')
+news_df = news_df.where(news_df.classificacao != 'Mineracao')
+news_df = news_df.where(news_df.classificacao != 'Especial')
+news_df = news_df.where(news_df.classificacao != 'Credito')
+news_df = news_df.where(news_df.classificacao != 'Comercio Exterior')
+news_df = news_df.where(news_df.classificacao != 'Consumo')
+news_df = news_df.where(news_df.classificacao != 'Petroleo')
+news_df = news_df.where(news_df.classificacao != 'Turismo e lazer')
+news_df = news_df.where(news_df.classificacao != 'Legislacao')
+news_df = news_df.where(news_df.classificacao != 'Previdencia')
+news_df = news_df.where(news_df.classificacao != 'Telecomunicacoes')
+news_df = news_df.where(news_df.classificacao != 'Contas Publicas')
+news_df = news_df.where(news_df.classificacao != 'Aviacao')
+news_df = news_df.where(news_df.classificacao != 'Politica GDF')
+news_df = news_df.where(news_df.classificacao != 'Habitacao')
+
+#+--------------+------+
+#| classificacao| count|
+#+--------------+------+
+#|       Cultura| 11146|
+#|      Trabalho| 12736|
+#|Infraestrutura| 13608|
+#|       Energia| 13987|
+#|    Transporte| 14276|
+#|       Esporte| 15672|
+#|   Agronegocio| 20053|
+#| Meio Ambiente| 20939|
+#|     Violencia| 29667|
+#|      Educacao| 38337|
+#|         Saude| 63747|
+#|      Economia| 93441|
+#|    Judiciario|114835|
+#|      Politica|187803|
+#+--------------+------+
+
+news_df = news_df.where(news_df.classificacao != 'Cultura')
+news_df = news_df.where(news_df.classificacao != 'Trabalho')
+news_df = news_df.where(news_df.classificacao != 'Infraestrutura')
+news_df = news_df.where(news_df.classificacao != 'Energia')
+news_df = news_df.where(news_df.classificacao != 'Transporte')
+news_df = news_df.where(news_df.classificacao != 'Agronegocio')
+news_df = news_df.where(news_df.classificacao != 'Meio Ambiente')
+news_df = news_df.where(news_df.classificacao != 'Violencia')
+news_df = news_df.where(news_df.classificacao != 'Esporte')
+
+count_news_df = news_df.groupBy('classificacao').count().sort(col("count").asc())
+
+#customers.withColumn("movingAvg", avg(customers("amountSpent")).over(wSpec2))
+
+#+-------------+------+
+#|classificacao| count| avg
+#+-------------+------+-------
+#|     Educacao| 38337| 0,0769
+#|        Saude| 63747| 0,1279
+#|     Economia| 93441| 0,1875
+#|   Judiciario|114835| 0,2305
+#|     Politica|187803| 0,3769
+#+-------------+------+
+
+count_news_df.groupBy('classificacao').agg(stddev('Count'))
+
+total_rows = news_df.count()
+#Total 498163
+
+
 # Total 100% = 709538
 # Total 50% = 354452
 # Total 40% = 283423
@@ -79,43 +145,47 @@ news_df = news_df.where(news_df.conteudo != '')
 # Total 15% = 106560
 # Total 10% = 70904
 
-# Calculate variance
-news_df_group = news_df.groupBy('classificacao').count().sort(col("count").desc())
-news_df_group.count()
 
-news_df_group = news_df_group.withColumn('count', news_df_group['count'].cast(FloatType()))
-news_df_group = news_df_group.select(col('count'))
-group_variance = news_df_group.agg(func.avg('count').alias('avg_variance')).rdd
-group_variance_df = sqlContext.createDataFrame(group_variance, news_df_group.schema)
-group_variance_df.show()
-
-#Total 100%
-#24466.828| 156,418
-#Total 50%
-#12222.482| 110,555
-#Total 40%
-#9773.207 | 98,859
-#Total 35%
-#8554.518 | 92,490
-#Total 30%
-#7327.483 | 85,600
-#Total 25%
-#6107.241 | 78,148
-#Total 20%
-#4893.069 | 69,950
-#Total 15%
-#3674.4827 | 60,617
-#Total 10%
-#2444.9656 | 49,446
 
 ###################################################
 # Get features from dataframe and transform in a vector  
-
-data = news_df
+newsGroup1 = news_df
+data = newsGroup1
 
 # StringIndex
 str_idx_model = StringIndexer(inputCol="classificacao", outputCol="idx_classificacao").fit(data)
 data_idx_clas = str_idx_model.transform(data)
+
+#data_idx_clas.groupBy('idx_classificacao').count().sort(col("count").asc()).show()
+
+#+-----------------+------+
+#|idx_classificacao| count|
+#+-----------------+------+
+#|              4.0| 38337|
+#|              3.0| 63747|
+#|              2.0| 93441|
+#|              1.0|114835|
+#|              0.0|187803|
+#+-----------------+------+
+
+# Get stratified sample
+newsSampled = data_idx_clas.sampleBy('idx_classificacao', fractions={0.0: .3769, 1.0: .2305, 2.0: .1875, 3.0: .1279, 4.0: .0769}, seed=1234L)
+#newsSampled.groupBy('idx_classificacao').count().show()
+
+#+-----------------+-----+
+#|idx_classificacao|count|
+#+-----------------+-----+
+#|              1.0|26470|
+#|              3.0| 8194|
+#|              0.0|70589|
+#|              4.0| 3030|
+#|              2.0|17424|
+#+-----------------+-----+
+
+
+newsSample.stddev('').show()
+
+data_idx_clas = newsSampled
 
 # Tokenize
 tk_model = Tokenizer(inputCol="conteudo", outputCol="tk_conteudo")
@@ -138,7 +208,34 @@ data_v_cont = hashingTF.transform(data_tk_cont)
 idf = IDF(inputCol="v_conteudo", outputCol="features_conteudo")
 idfModel = idf.fit(data_v_cont)
 data_idf_cont = idfModel.transform(data_v_cont)
+
+    ###################################################
+    # K-means
     
+from pyspark.mllib.clustering import KMeans, KMeansModel
+from numpy import array
+from math import sqrt
+from pyspark.mllib.linalg import Vectors
+from pyspark.mllib.regression import LabeledPoint  
+
+data_to_test = data_idf_cont.select(col("features_conteudo").alias("features"))
+
+parsedData = data_to_test.rdd.map(lambda line: (line.features).toArray())
+
+#parsedData = data.map(lambda lp: (float(nb.predict(lp.features))))
+
+# Build the model (cluster the data)
+clusters = KMeans.train(parsedData, 27, maxIterations=5,
+        runs=2, initializationMode="random", epsilon=1e-4, seed=1234L)
+
+# Evaluate clustering by computing Within Set Sum of Squared Errors
+def error(point):
+    center = clusters.centers[clusters.predict(point)]
+    return sqrt(sum([x**2 for x in (point - center)]))
+
+WSSSE = parsedData.map(lambda point: error(point)).reduce(lambda x, y: x + y)
+print("Within Set Sum of Squared Error = " + str(WSSSE))
+
     ###################################################
     # Naive Bayes
 
@@ -184,23 +281,34 @@ predictions = data_test.map(lambda p: (nb.predict(p.features), p.label))
 accuracy = 1.0 * predictions.filter(lambda (x, v): x == v).count() / data_test.count()
 
 print("Test set accuracy = " + str(accuracy))
-# 50%, 100000 features
-# Test set accuracy = 0.630712549234
-# 50%, 50000 features
-#Test set accuracy = 0.620083674123
-# 25%, 25000 features
-#Test set accuracy = 0.604404198783
+
+#Test set accuracy = 0.716342195426
 
 predictionAndLabels = data_test.map(lambda lp: (float(nb.predict(lp.features)), lp.label))
 
 metrics = MulticlassMetrics(predictionAndLabels)
-print("Recall NB = %s" % metrics.recall())
-print("Precision NB = %s" % metrics.precision())
-print("F1 measure NB = %s" % metrics.fMeasure())
 
-#Recall NB = 0.604404198783
-#Precision NB = 0.604404198783
-#F1 measure NB = 0.604404198783
+# Statistics by class
+labels = data.map(lambda lp: lp.label).distinct().collect()
+for label in sorted(labels):    
+    print("Class %s recall = %s" % (label, metrics.recall(label)))
+    
+#Class 0.0 recall = 0.680546396609
+#Class 1.0 recall = 0.695679716204
+#Class 2.0 recall = 0.804967979818
+#Class 3.0 recall = 0.861762328213
+#Class 4.0 recall = 0.834628190899
+
+# Weighted stats
+print("Weighted recall = %s" % metrics.weightedRecall)
+print("Weighted precision = %s" % metrics.weightedPrecision)
+print("Weighted F(1) Score = %s" % metrics.weightedFMeasure())
+print("Weighted F(0.5) Score = %s" % metrics.weightedFMeasure(beta=0.5))
+print("Weighted false positive rate = %s" % metrics.weightedFalsePositiveRate)
+
+#Weighted precision = 0.751056405489
+#Weighted false positive rate = 0.123613762317
+#Weighted false positive rate = 0.716342195426
     
     ###################################################
     # Random Forest
@@ -217,13 +325,13 @@ data = data_to_test
 labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
 
 # VectorIndexer
-featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=29).fit(data)
+featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=4).fit(data)
 
 # Divide
 (trainingData, testData) = data.randomSplit([0.7, 0.3], 1234L)
 
 # Train
-rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=10)
+rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures", numTrees=6)
 
 pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf])
 
@@ -233,15 +341,52 @@ predictions = model.transform(testData)
 
 # Select (prediction, true label) and compute test error
 evaluator = MulticlassClassificationEvaluator(
-    labelCol="indexedLabel", predictionCol="prediction", metricName="precision")
-accuracy = evaluator.evaluate(predictions)
-print("Test Error = %g" % (1.0 - accuracy))
+    labelCol="indexedLabel", predictionCol="prediction", metricName="recall")
+metric = evaluator.evaluate(predictions)
+print("recall = %g" % (metric))
 
-# 5 folds, 50%
-#Test Error = 0.689862 
-# 6 folds, 40%
-#Test Error = 0.678046 
-    
+#recall = 0.570034
+#weightedPrecision = 0.58534
+#Test Error = 0.429966
+
+###############
+# Cross Validation
+
+from pyspark.ml import Pipeline
+from pyspark.ml.classification import RandomForestClassifier
+from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+
+data = data_to_test
+
+# StringIndex
+labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(data)
+
+# VectorIndexer
+featureIndexer = VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=4).fit(data)
+
+# Divide
+(trainingData, testData) = data.randomSplit([0.7, 0.3], 1234L)
+
+rf = RandomForestClassifier(labelCol="label", featuresCol="features")
+evaluator = MulticlassClassificationEvaluator().setLabelCol("label").setPredictionCol("prediction").setMetricName('accuracy') 
+
+pipeline = Pipeline(stages=[rf])
+
+
+paramGrid = ParamGridBuilder().addGrid(5000, [4, 5, 6]).build()
+
+crossval = CrossValidator(
+    estimator=pipeline,
+    estimatorParamMaps=paramGrid,
+    evaluator=evaluator,
+    numFolds=6)
+
+model = crossval.fit(trainingData).bestModel
+pr = model.transform(trainingData)
+metric = evaluator.evaluate(pr)
+print "Accuracy metric = %g" % metric
+
     ###################################################
     # Logistic Regression
     
@@ -296,6 +441,8 @@ print("F1 Score = %s" % f1Score)
     
 from pyspark.ml.classification import MultilayerPerceptronClassifier
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+
+data_to_test = data_idf_cont.select(col("idx_classificacao").alias("label"), col("features_conteudo").alias("features"))
 
 # Load training data
 data = data_to_test
